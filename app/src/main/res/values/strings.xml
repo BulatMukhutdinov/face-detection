@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Face detection</string>
+
+    <string name="choose">Choose video source:</string>
+    <string name="camera">Camera</string>
+    <string name="gallery">Gallery</string>
+    <string name="web_view">WebView</string>
+    <string name="record">Record</string>
+    <string name="stop">Stop</string>
+    <string name="description_info">Info</string>
+    <string name="permission_request">This sample needs permission for camera and audio recording.</string>
+    <string name="camera_error">This device doesn\'t support Camera2 API.</string>
+</resources>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/root"
+    app:startDestination="@id/permissions">
+
+    <fragment
+        android:id="@+id/home"
+        android:name="tat.mukhutdinov.facedetection.HomeFragment"
+        android:label="Home"
+        tools:layout="@layout/home">
+
+        <action
+            android:id="@+id/toCamera"
+            app:destination="@id/camera" />
+
+        <action
+            android:id="@+id/toCameraFace"
+            app:destination="@id/cameraFace" />
+
+        <action
+            android:id="@+id/toPlayer"
+            app:destination="@id/player" />
+
+        <action
+            android:id="@+id/toWebView"
+            app:destination="@id/webView" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/camera"
+        android:name="tat.mukhutdinov.facedetection.camera.CameraFragment"
+        android:label="Camera"
+        tools:layout="@layout/camera">
+
+        <action
+            android:id="@+id/toPlayer"
+            app:destination="@id/player" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/cameraFace"
+        android:name="tat.mukhutdinov.facedetection.imageprocessor.CameraFaceFragment"
+        android:label="CameraFace"
+        tools:layout="@layout/camera_face" />
+
+    <fragment
+        android:id="@+id/permissions"
+        android:name="tat.mukhutdinov.facedetection.util.ui.PermissionsCheck"
+        android:label="Permissions">
+        <action
+            android:id="@+id/toHome"
+            app:destination="@id/home" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/player"
+        android:name="tat.mukhutdinov.facedetection.player.PlayerFragment"
+        android:label="Player">
+
+        <argument
+            android:name="path"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/webView"
+        android:name="tat.mukhutdinov.facedetection.webview.WebViewFragment"
+        android:label="WebView" />
+</navigation>

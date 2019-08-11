@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "282222970988",
+    "firebase_url": "https://videos-6f884.firebaseio.com",
+    "project_id": "videos-6f884",
+    "storage_bucket": "videos-6f884.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:282222970988:android:7fd05157dd611061",
+        "android_client_info": {
+          "package_name": "tat.mukhutdinov.facedetection"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "282222970988-gefi9gae2nur6hr97rqulild88u847h8.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAY6vT2Su6eX_sUcW2zjDIYjJzGy0OK2PA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "282222970988-gefi9gae2nur6hr97rqulild88u847h8.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
