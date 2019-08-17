@@ -33,7 +33,7 @@ public interface VisionImageProcessor {
     /**
      * Processes the bitmap images.
      */
-    void process(Bitmap bitmap, GraphicOverlay graphicOverlay, Boolean showOnlyContour);
+    void process(Bitmap bitmap, GraphicOverlay graphicOverlay);
 
     /**
      * Stops the underlying machine learning model and release resources.

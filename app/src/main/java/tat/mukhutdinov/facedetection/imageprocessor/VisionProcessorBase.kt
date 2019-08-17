@@ -50,8 +50,7 @@ abstract class VisionProcessorBase<T> : VisionImageProcessor {
     }
 
     // Bitmap version
-    override fun process(bitmap: Bitmap, graphicOverlay: GraphicOverlay, showOnlyContour: Boolean) {
-        Timber.e("Size is ${bitmap.height * bitmap.rowBytes}")
+    override fun process(bitmap: Bitmap, graphicOverlay: GraphicOverlay) {
         detectInVisionImage(
             bitmap, /* bitmap */
             FirebaseVisionImage.fromBitmap(bitmap),
@@ -61,8 +60,7 @@ abstract class VisionProcessorBase<T> : VisionImageProcessor {
                 .setRotation(0)
                 .setCameraFacing(CAMERA_FACING_BACK)
                 .build(),
-            graphicOverlay,
-            showOnlyContour
+            graphicOverlay
         )
     }
 
@@ -101,16 +99,14 @@ abstract class VisionProcessorBase<T> : VisionImageProcessor {
         originalCameraImage: Bitmap?,
         image: FirebaseVisionImage,
         metadata: FrameMetadata,
-        graphicOverlay: GraphicOverlay,
-        showOnlyContour: Boolean = false
+        graphicOverlay: GraphicOverlay
     ) {
         detectInImage(image)
             .addOnSuccessListener { results ->
                 onSuccess(
                     originalCameraImage, results,
                     metadata,
-                    graphicOverlay,
-                    showOnlyContour
+                    graphicOverlay
                 )
                 processLatestImage(graphicOverlay)
             }
@@ -131,8 +127,7 @@ abstract class VisionProcessorBase<T> : VisionImageProcessor {
         originalCameraImage: Bitmap?,
         results: T,
         frameMetadata: FrameMetadata,
-        graphicOverlay: GraphicOverlay,
-        showOnlyContour: Boolean = false
+        graphicOverlay: GraphicOverlay
     )
 
     protected abstract fun onFailure(e: Exception)

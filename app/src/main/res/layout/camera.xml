@@ -2,33 +2,46 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
     <tat.mukhutdinov.facedetection.camera.AutoFitTextureView
-        android:id="@+id/texture"
+        android:id="@+id/cameraTexture"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <View
-        android:id="@+id/dimmer"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="#FF424242"
+    <TextureView
+        android:id="@+id/galleryTexture"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <TextureView
+        android:id="@+id/webViewTexture"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/texture" />
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <tat.mukhutdinov.facedetection.common.GraphicOverlay
+        android:id="@+id/faceOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
     <Button
         android:id="@+id/record"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:layout_margin="16dp"
         android:text="@string/record"
-        app:layout_constraintBottom_toBottomOf="@id/dimmer"
-        app:layout_constraintEnd_toEndOf="@id/dimmer"
-        app:layout_constraintStart_toStartOf="@id/dimmer"
-        app:layout_constraintTop_toTopOf="@id/dimmer" />
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>

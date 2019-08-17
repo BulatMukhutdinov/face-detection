@@ -258,8 +258,6 @@ public class MediaCodecWrapper {
             // indicates the position (play time) for the current sample.
             if (!isSecure) {
                 mDecoder.queueInputBuffer(index, 0, size, presentationTimeUs, flags);
-
-                int a = 5;
             } else {
                 extractor.getSampleCryptoInfo(sCryptoInfo);
                 mDecoder.queueSecureInputBuffer(index, 0, sCryptoInfo, presentationTimeUs, flags);

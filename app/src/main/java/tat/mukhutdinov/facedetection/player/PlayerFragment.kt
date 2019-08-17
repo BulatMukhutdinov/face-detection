@@ -42,7 +42,7 @@ class PlayerFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
     private var imageMaxWidth = 0
     // Max height (portrait mode)
     private var imageMaxHeight = 0
-    private val imageProcessor: VisionImageProcessor by lazy { FaceDetectionProcessor(resources) }
+    private val imageProcessor: VisionImageProcessor by lazy { FaceDetectionProcessor(resources, false) }
 
     val handler = CoroutineExceptionHandler { _, throwable ->
         Timber.e(throwable)
@@ -111,7 +111,7 @@ class PlayerFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
     override fun outputSample(sender: MediaCodecWrapper, info: MediaCodec.BufferInfo, buffer: ByteBuffer) {
         launch(handler) {
             val resized = Bitmap.createScaledBitmap(texture.bitmap, 320, 180, true)
-            imageProcessor.process(resized, faceOverlay, false)
+            imageProcessor.process(resized, faceOverlay)
         }
     }
 

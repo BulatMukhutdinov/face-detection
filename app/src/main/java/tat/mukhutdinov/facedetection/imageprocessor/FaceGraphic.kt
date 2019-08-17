@@ -23,9 +23,8 @@ class FaceGraphic(
     overlay: GraphicOverlay,
     private val firebaseVisionFace: FirebaseVisionFace?,
     private val facing: Int,
-    private val overlayBitmap: Bitmap?,
-    private val showOnlyContour: Boolean = false
-) : GraphicOverlay.Graphic(overlay) {
+    private val overlayBitmap: Bitmap?
+    ) : GraphicOverlay.Graphic(overlay) {
 
     /**
      * Draws the face annotations for position on the supplied canvas.
@@ -66,57 +65,53 @@ class FaceGraphic(
 
         canvas.drawRect(left, top, right, bottom, boxPaint)
 
-        if (showOnlyContour) {
-            return
-        }
-
-        canvas.drawCircle(x, y - 4 * ID_Y_OFFSET, FACE_POSITION_RADIUS, facePositionPaint)
-        canvas.drawText("id: " + face.trackingId, x + ID_X_OFFSET, y - 3 * ID_Y_OFFSET, idPaint)
-        canvas.drawText(
-            "happiness: ${String.format("%.2f", face.smilingProbability)}",
-            x + ID_X_OFFSET * 3,
-            y - 2 * ID_Y_OFFSET,
-            idPaint
-        )
-        if (facing == CameraSource.CAMERA_FACING_FRONT) {
-            canvas.drawText(
-                "right eye: ${String.format("%.2f", face.rightEyeOpenProbability)}",
-                x - ID_X_OFFSET,
-                y,
-                idPaint
-            )
-            canvas.drawText(
-                "left eye: ${String.format("%.2f", face.leftEyeOpenProbability)}",
-                x + ID_X_OFFSET * 6,
-                y,
-                idPaint
-            )
-        } else {
-            canvas.drawText(
-                "left eye: ${String.format("%.2f", face.leftEyeOpenProbability)}",
-                x - ID_X_OFFSET,
-                y,
-                idPaint
-            )
-            canvas.drawText(
-                "right eye: ${String.format("%.2f", face.rightEyeOpenProbability)}",
-                x + ID_X_OFFSET * 6,
-                y,
-                idPaint
-            )
-        }
-
-        // draw landmarks
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.MOUTH_BOTTOM)
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.LEFT_CHEEK)
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.LEFT_EAR)
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.MOUTH_LEFT)
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.LEFT_EYE)
-        drawBitmapOverLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.NOSE_BASE)
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.RIGHT_CHEEK)
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.RIGHT_EAR)
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.RIGHT_EYE)
-        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.MOUTH_RIGHT)
+//        canvas.drawCircle(x, y - 4 * ID_Y_OFFSET, FACE_POSITION_RADIUS, facePositionPaint)
+//        canvas.drawText("id: " + face.trackingId, x + ID_X_OFFSET, y - 3 * ID_Y_OFFSET, idPaint)
+//        canvas.drawText(
+//            "happiness: ${String.format("%.2f", face.smilingProbability)}",
+//            x + ID_X_OFFSET * 3,
+//            y - 2 * ID_Y_OFFSET,
+//            idPaint
+//        )
+//        if (facing == CameraSource.CAMERA_FACING_FRONT) {
+//            canvas.drawText(
+//                "right eye: ${String.format("%.2f", face.rightEyeOpenProbability)}",
+//                x - ID_X_OFFSET,
+//                y,
+//                idPaint
+//            )
+//            canvas.drawText(
+//                "left eye: ${String.format("%.2f", face.leftEyeOpenProbability)}",
+//                x + ID_X_OFFSET * 6,
+//                y,
+//                idPaint
+//            )
+//        } else {
+//            canvas.drawText(
+//                "left eye: ${String.format("%.2f", face.leftEyeOpenProbability)}",
+//                x - ID_X_OFFSET,
+//                y,
+//                idPaint
+//            )
+//            canvas.drawText(
+//                "right eye: ${String.format("%.2f", face.rightEyeOpenProbability)}",
+//                x + ID_X_OFFSET * 6,
+//                y,
+//                idPaint
+//            )
+//        }
+//
+//        // draw landmarks
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.MOUTH_BOTTOM)
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.LEFT_CHEEK)
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.LEFT_EAR)
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.MOUTH_LEFT)
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.LEFT_EYE)
+//        drawBitmapOverLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.NOSE_BASE)
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.RIGHT_CHEEK)
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.RIGHT_EAR)
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.RIGHT_EYE)
+//        drawLandmarkPosition(canvas, face, FirebaseVisionFaceLandmark.MOUTH_RIGHT)
     }
 
     private fun drawLandmarkPosition(canvas: Canvas, face: FirebaseVisionFace, landmarkID: Int) {

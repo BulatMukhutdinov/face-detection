@@ -16,63 +16,67 @@
 
 package tat.mukhutdinov.facedetection.camera
 
+import android.animation.TimeAnimator
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.res.Configuration
-import android.graphics.Matrix
-import android.graphics.RectF
-import android.graphics.SurfaceTexture
-import android.hardware.camera2.CameraAccessException
-import android.hardware.camera2.CameraCaptureSession
+import android.graphics.*
+import android.hardware.camera2.*
 import android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
 import android.hardware.camera2.CameraCharacteristics.SENSOR_ORIENTATION
-import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraDevice.TEMPLATE_PREVIEW
-import android.hardware.camera2.CameraDevice.TEMPLATE_RECORD
-import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CameraMetadata
-import android.hardware.camera2.CaptureRequest
+import android.media.MediaCodec
+import android.media.MediaExtractor
+import android.media.MediaMetadataRetriever
 import android.media.MediaRecorder
+import android.media.projection.MediaProjection
+import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.HandlerThread
+import android.util.DisplayMetrics
 import android.util.Size
 import android.util.SparseIntArray
-import android.view.LayoutInflater
-import android.view.Surface
-import android.view.TextureView
-import android.view.View
-import android.view.ViewGroup
-import android.widget.Button
+import android.view.*
 import android.widget.Toast
 import android.widget.Toast.LENGTH_SHORT
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
-import androidx.navigation.fragment.findNavController
+import androidx.navigation.fragment.navArgs
+import kotlinx.android.synthetic.main.camera.*
+import kotlinx.coroutines.*
 import tat.mukhutdinov.facedetection.R
+import tat.mukhutdinov.facedetection.common.CameraSource
+import tat.mukhutdinov.facedetection.common.VisionImageProcessor
+import tat.mukhutdinov.facedetection.imageprocessor.FaceDetectionProcessor
+import tat.mukhutdinov.facedetection.imageprocessor.MediaCodecWrapper
 import timber.log.Timber
-import java.io.IOException
-import java.util.Collections
+import java.util.*
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
 
-class CameraFragment : Fragment(), View.OnClickListener {
+@Suppress("PLUGIN_WARNING")
+class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.Default) {
+
+    private val args: CameraFragmentArgs by navArgs()
+
+    private val url = "https://www.videvo.net/videvo_files/converted/2018_04/preview/171215_C_19.mp473209.webm"
 
     private val FRAGMENT_DIALOG = "dialog"
-    private val SENSOR_ORIENTATION_DEFAULT_DEGREES = 90
-    private val SENSOR_ORIENTATION_INVERSE_DEGREES = 270
-    private val DEFAULT_ORIENTATIONS = SparseIntArray().apply {
-        append(Surface.ROTATION_0, 90)
-        append(Surface.ROTATION_90, 0)
-        append(Surface.ROTATION_180, 270)
-        append(Surface.ROTATION_270, 180)
+    private val galleryTimeAnimator = TimeAnimator()
+    private var galleryCodecWrapper: MediaCodecWrapper? = null
+    private val galleryExtractor = MediaExtractor()
+
+    private val webViewTimeAnimator = TimeAnimator()
+    private var webViewCodecWrapper: MediaCodecWrapper? = null
+    private val webViewExtractor = MediaExtractor()
+
+    val handler = CoroutineExceptionHandler { _, throwable ->
+        Timber.e(throwable)
     }
-    private val INVERSE_ORIENTATIONS = SparseIntArray().apply {
-        append(Surface.ROTATION_0, 270)
-        append(Surface.ROTATION_90, 180)
-        append(Surface.ROTATION_180, 90)
-        append(Surface.ROTATION_270, 0)
-    }
+
+    private val imageProcessor: VisionImageProcessor by lazy { FaceDetectionProcessor(resources, true) }
 
     /**
      * [TextureView.SurfaceTextureListener] handles several lifecycle events on a
@@ -92,16 +96,6 @@ class CameraFragment : Fragment(), View.OnClickListener {
 
         override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) = Unit
     }
-
-    /**
-     * An [AutoFitTextureView] for camera preview.
-     */
-    private lateinit var textureView: AutoFitTextureView
-
-    /**
-     * Button to record video
-     */
-    private lateinit var videoButton: Button
 
     /**
      * A reference to the opened [android.hardware.camera2.CameraDevice].
@@ -163,7 +157,7 @@ class CameraFragment : Fragment(), View.OnClickListener {
             cameraOpenCloseLock.release()
             this@CameraFragment.cameraDevice = cameraDevice
             startPreview()
-            configureTransform(textureView.width, textureView.height)
+            configureTransform(cameraTexture.width, cameraTexture.height)
         }
 
         override fun onDisconnected(cameraDevice: CameraDevice) {
@@ -180,22 +174,39 @@ class CameraFragment : Fragment(), View.OnClickListener {
         }
     }
 
-    /**
-     * Output file for video
-     */
-    private var nextVideoAbsolutePath: String? = null
-
-    private var mediaRecorder: MediaRecorder? = null
-
-    override fun onCreateView(inflater: LayoutInflater,
-                              container: ViewGroup?,
-                              savedInstanceState: Bundle?
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
     ): View? = inflater.inflate(R.layout.camera, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        textureView = view.findViewById(R.id.texture)
-        videoButton = view.findViewById<Button>(R.id.record).also {
-            it.setOnClickListener(this)
+        Handler().postDelayed({
+            setupPlayback()
+        }, 500)
+
+        record.setOnClickListener {
+            onToggleScreenShare(it)
+//            if (isRecordingVideo) stopRecordingVideo() else startRecordingVideo()
+        }
+
+        launch(handler) {
+            delay(1000)
+
+            while (true) {
+                val bmOverlay = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+
+                Canvas(bmOverlay).apply {
+                    drawBitmap(cameraTexture.bitmap, cameraTexture.x, cameraTexture.y, null)
+                    drawBitmap(galleryTexture.bitmap, galleryTexture.x, galleryTexture.y, null)
+                    drawBitmap(webViewTexture.bitmap, webViewTexture.x, webViewTexture.y, null)
+                }
+
+                val resized = getResizedBitmap(bmOverlay, RESIZED_IMAGE_SIZE)
+                imageProcessor.process(resized, faceOverlay)
+
+                delay(100)
+            }
         }
     }
 
@@ -207,10 +218,10 @@ class CameraFragment : Fragment(), View.OnClickListener {
         // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
         // the SurfaceTextureListener).
-        if (textureView.isAvailable) {
-            openCamera(textureView.width, textureView.height)
+        if (cameraTexture.isAvailable) {
+            openCamera(cameraTexture.width, cameraTexture.height)
         } else {
-            textureView.surfaceTextureListener = surfaceTextureListener
+            cameraTexture.surfaceTextureListener = surfaceTextureListener
         }
     }
 
@@ -220,8 +231,143 @@ class CameraFragment : Fragment(), View.OnClickListener {
         super.onPause()
     }
 
-    override fun onClick(view: View) {
-        if (isRecordingVideo) stopRecordingVideo() else startRecordingVideo()
+    private fun galleryPlay() {
+        val videoUri = Uri.parse(args.path)
+
+        galleryExtractor.setDataSource(requireContext(), videoUri, null)
+        val nTracks = galleryExtractor.trackCount
+
+        for (i in 0 until nTracks) {
+            galleryExtractor.unselectTrack(i)
+        }
+
+        for (i in 0 until nTracks) {
+            galleryCodecWrapper = MediaCodecWrapper.fromVideoFormat(
+                galleryExtractor.getTrackFormat(i),
+                Surface(galleryTexture.surfaceTexture)
+            )
+            if (galleryCodecWrapper != null) {
+                galleryExtractor.selectTrack(i)
+                break
+            }
+        }
+
+        galleryTimeAnimator.setTimeListener { _, totalTime, _ ->
+            val isEos = galleryExtractor.sampleFlags and MediaCodec
+                .BUFFER_FLAG_END_OF_STREAM == MediaCodec.BUFFER_FLAG_END_OF_STREAM
+
+            if (!isEos) {
+                val result = galleryCodecWrapper?.writeSample(
+                    galleryExtractor, false,
+                    galleryExtractor.sampleTime, galleryExtractor.sampleFlags
+                )
+
+                if (result == true) {
+                    galleryExtractor.advance()
+                }
+            }
+            val outBufferInfo = MediaCodec.BufferInfo()
+            galleryCodecWrapper?.peekSample(outBufferInfo)
+
+            if (outBufferInfo.size <= 0 && isEos) {
+                galleryTimeAnimator.end()
+                galleryCodecWrapper?.stopAndRelease()
+                galleryExtractor.release()
+            } else if (outBufferInfo.presentationTimeUs / 1000 < totalTime) {
+                galleryCodecWrapper?.popSample(true)
+            }
+        }
+
+        galleryTimeAnimator.start()
+    }
+
+    private fun webViewPlay() {
+        webViewExtractor.setDataSource(url, mapOf())
+        val nTracks = webViewExtractor.trackCount
+
+        for (i in 0 until nTracks) {
+            webViewExtractor.unselectTrack(i)
+        }
+
+        for (i in 0 until nTracks) {
+            webViewCodecWrapper = MediaCodecWrapper.fromVideoFormat(
+                webViewExtractor.getTrackFormat(i),
+                Surface(webViewTexture.surfaceTexture)
+            )
+            if (webViewCodecWrapper != null) {
+                webViewExtractor.selectTrack(i)
+                break
+            }
+        }
+
+        webViewTimeAnimator.setTimeListener { _, totalTime, _ ->
+            val isEos = webViewExtractor.sampleFlags and MediaCodec
+                .BUFFER_FLAG_END_OF_STREAM == MediaCodec.BUFFER_FLAG_END_OF_STREAM
+
+            if (!isEos) {
+                val result = webViewCodecWrapper?.writeSample(
+                    webViewExtractor, false,
+                    webViewExtractor.sampleTime, webViewExtractor.sampleFlags
+                )
+
+                if (result == true) {
+                    webViewExtractor.advance()
+                }
+            }
+            val outBufferInfo = MediaCodec.BufferInfo()
+            webViewCodecWrapper?.peekSample(outBufferInfo)
+
+            if (outBufferInfo.size <= 0 && isEos) {
+                webViewTimeAnimator.end()
+                webViewCodecWrapper?.stopAndRelease()
+                webViewExtractor.release()
+            } else if (outBufferInfo.presentationTimeUs / 1000 < totalTime) {
+                webViewCodecWrapper?.popSample(true)
+            }
+        }
+
+        webViewTimeAnimator.start()
+    }
+
+    private fun setupPlayback() {
+        val mediaMetadataRetriever = MediaMetadataRetriever()
+        mediaMetadataRetriever.setDataSource(requireContext(), Uri.parse(args.path))
+        var imageBitmap = mediaMetadataRetriever.getFrameAtTime(1, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+
+        var resized = getResizedBitmap(imageBitmap, RESIZED_IMAGE_SIZE)
+
+        val galleryParams = galleryTexture.layoutParams
+        galleryParams.width = root.width
+        galleryParams.height = resized.height * root.width / resized.width
+        galleryTexture.layoutParams = galleryParams
+
+        mediaMetadataRetriever.setDataSource(url, hashMapOf())
+
+        imageBitmap = mediaMetadataRetriever.getFrameAtTime(1, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
+
+        resized = getResizedBitmap(imageBitmap, RESIZED_IMAGE_SIZE)
+
+        val viewViewParams = webViewTexture.layoutParams
+        viewViewParams.width = root.width
+        viewViewParams.height = resized.height * root.width / resized.width
+        webViewTexture.layoutParams = viewViewParams
+
+        var width = root.width
+        var height = root.height
+
+        val ratio = width.toFloat() / height.toFloat()
+        if (ratio > 1) {
+            width = RESIZED_IMAGE_SIZE
+            height = (width / ratio).toInt()
+        } else {
+            height = RESIZED_IMAGE_SIZE
+            width = (height * ratio).toInt()
+        }
+
+        faceOverlay.setCameraInfo(width, height, CameraSource.CAMERA_FACING_BACK)
+
+        galleryPlay()
+        webViewPlay()
     }
 
     /**
@@ -263,23 +409,25 @@ class CameraFragment : Fragment(), View.OnClickListener {
             if (!cameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw RuntimeException("Time out waiting to lock camera opening.")
             }
-            val cameraId = manager.cameraIdList[0]
+            val cameraId = manager.cameraIdList[1]
 
             // Choose the sizes for camera preview and video recording
             val characteristics = manager.getCameraCharacteristics(cameraId)
-            val map = characteristics.get(SCALER_STREAM_CONFIGURATION_MAP) ?: throw RuntimeException("Cannot get available preview/video sizes")
+            val map = characteristics.get(SCALER_STREAM_CONFIGURATION_MAP)
+                ?: throw RuntimeException("Cannot get available preview/video sizes")
             sensorOrientation = characteristics.get(SENSOR_ORIENTATION) ?: 0
             videoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder::class.java))
-            previewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture::class.java),
-                width, height, videoSize)
+            previewSize = chooseOptimalSize(
+                map.getOutputSizes(SurfaceTexture::class.java),
+                width, height, videoSize
+            )
 
             if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                textureView.setAspectRatio(previewSize.width, previewSize.height)
+                cameraTexture.setAspectRatio(previewSize.width, previewSize.height)
             } else {
-                textureView.setAspectRatio(previewSize.height, previewSize.width)
+                cameraTexture.setAspectRatio(previewSize.height, previewSize.width)
             }
             configureTransform(width, height)
-            mediaRecorder = MediaRecorder()
             manager.openCamera(cameraId, stateCallback, null)
         } catch (e: CameraAccessException) {
             showToast("Cannot access the camera.")
@@ -303,8 +451,6 @@ class CameraFragment : Fragment(), View.OnClickListener {
             closePreviewSession()
             cameraDevice?.close()
             cameraDevice = null
-            mediaRecorder?.release()
-            mediaRecorder = null
         } catch (e: InterruptedException) {
             throw RuntimeException("Interrupted while trying to lock camera closing.", e)
         } finally {
@@ -316,11 +462,11 @@ class CameraFragment : Fragment(), View.OnClickListener {
      * Start the camera preview.
      */
     private fun startPreview() {
-        if (cameraDevice == null || !textureView.isAvailable) return
+        if (cameraDevice == null || !cameraTexture.isAvailable) return
 
         try {
             closePreviewSession()
-            val texture = textureView.surfaceTexture
+            val texture = cameraTexture!!.surfaceTexture
             texture.setDefaultBufferSize(previewSize.width, previewSize.height)
             previewRequestBuilder = cameraDevice!!.createCaptureRequest(TEMPLATE_PREVIEW)
 
@@ -338,7 +484,8 @@ class CameraFragment : Fragment(), View.OnClickListener {
                     override fun onConfigureFailed(session: CameraCaptureSession) {
                         if (activity != null) showToast("Failed")
                     }
-                }, backgroundHandler)
+                }, backgroundHandler
+            )
         } catch (e: CameraAccessException) {
             Timber.e(e.toString())
         }
@@ -353,8 +500,10 @@ class CameraFragment : Fragment(), View.OnClickListener {
         try {
             setUpCaptureRequestBuilder(previewRequestBuilder)
             HandlerThread("CameraPreview").start()
-            captureSession?.setRepeatingRequest(previewRequestBuilder.build(),
-                null, backgroundHandler)
+            captureSession?.setRepeatingRequest(
+                previewRequestBuilder.build(),
+                null, backgroundHandler
+            )
         } catch (e: CameraAccessException) {
             Timber.e(e.toString())
         }
@@ -365,12 +514,12 @@ class CameraFragment : Fragment(), View.OnClickListener {
     }
 
     /**
-     * Configures the necessary [android.graphics.Matrix] transformation to `textureView`.
+     * Configures the necessary [android.graphics.Matrix] transformation to `cameraTextureView`.
      * This method should not to be called until the camera preview size is determined in
-     * openCamera, or until the size of `textureView` is fixed.
+     * openCamera, or until the size of `cameraTextureView` is fixed.
      *
-     * @param viewWidth  The width of `textureView`
-     * @param viewHeight The height of `textureView`
+     * @param viewWidth  The width of `cameraTextureView`
+     * @param viewHeight The height of `cameraTextureView`
      */
     private fun configureTransform(viewWidth: Int, viewHeight: Int) {
         activity ?: return
@@ -386,43 +535,14 @@ class CameraFragment : Fragment(), View.OnClickListener {
             matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL)
             val scale = Math.max(
                 viewHeight.toFloat() / previewSize.height,
-                viewWidth.toFloat() / previewSize.width)
+                viewWidth.toFloat() / previewSize.width
+            )
             with(matrix) {
                 postScale(scale, scale, centerX, centerY)
                 postRotate((90 * (rotation - 2)).toFloat(), centerX, centerY)
             }
         }
-        textureView.setTransform(matrix)
-    }
-
-    @Throws(IOException::class)
-    private fun setUpMediaRecorder() {
-        val cameraActivity = activity ?: return
-
-        if (nextVideoAbsolutePath.isNullOrEmpty()) {
-            nextVideoAbsolutePath = getVideoFilePath(cameraActivity)
-        }
-
-        val rotation = cameraActivity.windowManager.defaultDisplay.rotation
-        when (sensorOrientation) {
-            SENSOR_ORIENTATION_DEFAULT_DEGREES ->
-                mediaRecorder?.setOrientationHint(DEFAULT_ORIENTATIONS.get(rotation))
-            SENSOR_ORIENTATION_INVERSE_DEGREES ->
-                mediaRecorder?.setOrientationHint(INVERSE_ORIENTATIONS.get(rotation))
-        }
-
-        mediaRecorder?.apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setVideoSource(MediaRecorder.VideoSource.SURFACE)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setOutputFile(nextVideoAbsolutePath)
-            setVideoEncodingBitRate(10000000)
-            setVideoFrameRate(30)
-            setVideoSize(videoSize.width, videoSize.height)
-            setVideoEncoder(MediaRecorder.VideoEncoder.H264)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            prepare()
-        }
+        cameraTexture!!.setTransform(matrix)
     }
 
     private fun getVideoFilePath(context: Context?): String {
@@ -436,69 +556,28 @@ class CameraFragment : Fragment(), View.OnClickListener {
         }
     }
 
-    private fun startRecordingVideo() {
-        if (cameraDevice == null || !textureView.isAvailable) return
+    private var mScreenDensity: Int = 0
+    private var mProjectionManager: MediaProjectionManager? = null
+    private var mMediaProjection: MediaProjection? = null
+    private var mMediaRecorder: MediaRecorder? = null
 
-        try {
-            closePreviewSession()
-            setUpMediaRecorder()
-            val texture = textureView.surfaceTexture.apply {
-                setDefaultBufferSize(previewSize.width, previewSize.height)
-            }
+    override fun onDestroy() {
+        super.onDestroy()
+        if (mMediaProjection != null) {
+            mMediaProjection?.stop()
+            mMediaProjection = null
+        }
+    }
 
-            // Set up Surface for camera preview and MediaRecorder
-            val previewSurface = Surface(texture)
-            val recorderSurface = mediaRecorder!!.surface
-            val surfaces = ArrayList<Surface>().apply {
-                add(previewSurface)
-                add(recorderSurface)
-            }
-            previewRequestBuilder = cameraDevice!!.createCaptureRequest(TEMPLATE_RECORD).apply {
-                addTarget(previewSurface)
-                addTarget(recorderSurface)
-            }
-
-            // Start a capture session
-            // Once the session starts, we can update the UI and start recording
-            cameraDevice?.createCaptureSession(surfaces,
-                object : CameraCaptureSession.StateCallback() {
-
-                    override fun onConfigured(cameraCaptureSession: CameraCaptureSession) {
-                        captureSession = cameraCaptureSession
-                        updatePreview()
-                        activity?.runOnUiThread {
-                            videoButton.setText(R.string.stop)
-                            isRecordingVideo = true
-                            mediaRecorder?.start()
-                        }
-                    }
-
-                    override fun onConfigureFailed(cameraCaptureSession: CameraCaptureSession) {
-                        if (activity != null) showToast("Failed")
-                    }
-                }, backgroundHandler)
-        } catch (e: CameraAccessException) {
-            Timber.e(e.toString())
-        } catch (e: IOException) {
-            Timber.e(e.toString())
+    fun onToggleScreenShare(view: View) {
+        if (!isRecordingVideo) {
+        } else {
         }
     }
 
     private fun closePreviewSession() {
         captureSession?.close()
         captureSession = null
-    }
-
-    private fun stopRecordingVideo() {
-        isRecordingVideo = false
-        videoButton.setText(R.string.record)
-        mediaRecorder?.apply {
-            stop()
-            reset()
-        }
-
-        findNavController().navigate(CameraFragmentDirections.toPlayer(nextVideoAbsolutePath.orEmpty()))
-        nextVideoAbsolutePath = null
     }
 
     private fun showToast(message: String) = Toast.makeText(activity, message, LENGTH_SHORT).show()
@@ -547,7 +626,22 @@ class CameraFragment : Fragment(), View.OnClickListener {
         }
     }
 
+    private fun getResizedBitmap(image: Bitmap, maxSize: Int): Bitmap {
+        var width = image.width
+        var height = image.height
+
+        val bitmapRatio = width.toFloat() / height.toFloat()
+        if (bitmapRatio > 1) {
+            width = maxSize
+            height = (width / bitmapRatio).toInt()
+        } else {
+            height = maxSize
+            width = (height * bitmapRatio).toInt()
+        }
+        return Bitmap.createScaledBitmap(image, width, height, true)
+    }
+
     companion object {
-        fun newInstance(): CameraFragment = CameraFragment()
+        const val RESIZED_IMAGE_SIZE = 400
     }
 }

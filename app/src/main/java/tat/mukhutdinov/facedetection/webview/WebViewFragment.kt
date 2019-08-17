@@ -44,7 +44,7 @@ class WebViewFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers
 
     private val url = "https://www.videvo.net/videvo_files/converted/2018_04/preview/171215_C_19.mp473209.webm"
 
-    private val imageProcessor: VisionImageProcessor by lazy { FaceDetectionProcessor(resources) }
+    private val imageProcessor: VisionImageProcessor by lazy { FaceDetectionProcessor(resources, true) }
 
     private val extractor = MediaExtractor()
     private val timeAnimator = TimeAnimator()
@@ -85,7 +85,7 @@ class WebViewFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers
     override fun outputSample(sender: MediaCodecWrapper?, info: MediaCodec.BufferInfo?, buffer: ByteBuffer?) {
         launch(handler) {
             val resized = getResizedBitmap(texture.bitmap, 160)
-            imageProcessor.process(resized, faceOverlay, true)
+            imageProcessor.process(resized, faceOverlay)
         }
     }
 

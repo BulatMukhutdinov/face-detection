@@ -16,7 +16,7 @@ import tat.mukhutdinov.facedetection.common.GraphicOverlay
 import timber.log.Timber
 import java.io.IOException
 
-class FaceDetectionProcessor(res: Resources) : VisionProcessorBase<List<FirebaseVisionFace>>() {
+class FaceDetectionProcessor(res: Resources, private val showOnlyContour: Boolean) : VisionProcessorBase<List<FirebaseVisionFace>>() {
 
     private val detector: FirebaseVisionFaceDetector
 
@@ -49,20 +49,17 @@ class FaceDetectionProcessor(res: Resources) : VisionProcessorBase<List<Firebase
         originalCameraImage: Bitmap?,
         results: List<FirebaseVisionFace>,
         frameMetadata: FrameMetadata,
-        graphicOverlay: GraphicOverlay,
-        showOnlyContour: Boolean
+        graphicOverlay: GraphicOverlay
     ) {
         graphicOverlay.clear()
 
-        if (!showOnlyContour) {
-            val imageGraphic = CameraImageGraphic(graphicOverlay, originalCameraImage)
-            graphicOverlay.add(imageGraphic)
-        }
+        val imageGraphic = CameraImageGraphic(graphicOverlay, originalCameraImage)
+        graphicOverlay.add(imageGraphic)
 
         for (i in results.indices) {
             val face = results[i]
             val cameraFacing = frameMetadata.cameraFacing
-            val faceGraphic = FaceGraphic(graphicOverlay, face, cameraFacing, overlayBitmap, showOnlyContour)
+            val faceGraphic = FaceGraphic(graphicOverlay, face, cameraFacing, overlayBitmap)
             graphicOverlay.add(faceGraphic)
         }
 
