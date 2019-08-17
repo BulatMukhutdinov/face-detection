@@ -6,6 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:keepScreenOn="true"
+    android:background="#333333"
     tools:context=".util.ui.ContainerActivity">
 
     <fragment
@@ -15,6 +16,6 @@
         android:layout_height="match_parent"
         app:defaultNavHost="true"
         app:navGraph="@navigation/main"
-        tools:layout="@layout/home" />
+        tools:layout="@layout/home"/>
 
 </FrameLayout>

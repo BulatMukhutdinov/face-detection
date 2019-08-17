@@ -97,8 +97,10 @@ public class MediaCodecWrapper {
      * Releases resources and ends the encoding/decoding session.
      */
     public void stopAndRelease() {
-        mDecoder.stop();
-        mDecoder.release();
+        if (mDecoder != null) {
+            mDecoder.stop();
+            mDecoder.release();
+        }
         mDecoder = null;
         mHandler = null;
     }

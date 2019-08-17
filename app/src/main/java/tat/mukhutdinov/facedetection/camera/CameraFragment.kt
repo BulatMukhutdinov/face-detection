@@ -18,13 +18,17 @@ package tat.mukhutdinov.facedetection.camera
 
 import android.animation.TimeAnimator
 import android.annotation.SuppressLint
+import android.app.Activity.RESULT_OK
 import android.content.Context
+import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.*
 import android.hardware.camera2.*
 import android.hardware.camera2.CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP
 import android.hardware.camera2.CameraCharacteristics.SENSOR_ORIENTATION
 import android.hardware.camera2.CameraDevice.TEMPLATE_PREVIEW
+import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaMetadataRetriever
@@ -37,12 +41,13 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.util.DisplayMetrics
 import android.util.Size
-import android.util.SparseIntArray
 import android.view.*
 import android.widget.Toast
 import android.widget.Toast.LENGTH_SHORT
+import android.widget.ToggleButton
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
+import androidx.navigation.fragment.findNavController
 import androidx.navigation.fragment.navArgs
 import kotlinx.android.synthetic.main.camera.*
 import kotlinx.coroutines.*
@@ -52,6 +57,7 @@ import tat.mukhutdinov.facedetection.common.VisionImageProcessor
 import tat.mukhutdinov.facedetection.imageprocessor.FaceDetectionProcessor
 import tat.mukhutdinov.facedetection.imageprocessor.MediaCodecWrapper
 import timber.log.Timber
+import java.io.IOException
 import java.util.*
 import java.util.concurrent.Semaphore
 import java.util.concurrent.TimeUnit
@@ -174,6 +180,29 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
         }
     }
 
+    private val PERMISSION_CODE = 1
+    private var mScreenDensity: Int = 0
+    private var mProjectionManager: MediaProjectionManager? = null
+    private val DISPLAY_WIDTH = 1080
+    private val DISPLAY_HEIGHT = 2160
+    private var mMediaProjection: MediaProjection? = null
+    private var mVirtualDisplay: VirtualDisplay? = null
+    private var mMediaProjectionCallback: MediaProjectionCallback? = null
+    private var mToggleButton: ToggleButton? = null
+    private var mMediaRecorder: MediaRecorder? = null
+
+    private inner class MediaProjectionCallback : MediaProjection.Callback() {
+        override fun onStop() {
+            if (mToggleButton?.isChecked() == true) {
+                mToggleButton?.setChecked(false)
+                mMediaRecorder?.stop()
+                mMediaRecorder?.reset()
+            }
+            mMediaProjection = null
+            stopScreenSharing()
+        }
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -181,13 +210,22 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
     ): View? = inflater.inflate(R.layout.camera, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        initRecorderView()
+
         Handler().postDelayed({
             setupPlayback()
         }, 500)
 
         record.setOnClickListener {
-            onToggleScreenShare(it)
-//            if (isRecordingVideo) stopRecordingVideo() else startRecordingVideo()
+            if (!isRecordingVideo) {
+                shareScreen()
+            } else {
+                mMediaRecorder?.stop()
+                mMediaRecorder?.reset()
+                stopScreenSharing()
+            }
+
+            isRecordingVideo = !isRecordingVideo
         }
 
         launch(handler) {
@@ -210,14 +248,108 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
         }
     }
 
+    private fun shareScreen() {
+        if (mMediaProjection == null) {
+            startActivityForResult(mProjectionManager!!.createScreenCaptureIntent(), PERMISSION_CODE)
+            return
+        }
+        mVirtualDisplay = createVirtualDisplay()
+        mMediaRecorder?.start()
+    }
+
+    private fun stopScreenSharing() {
+        if (mVirtualDisplay == null) {
+            return
+        }
+        mVirtualDisplay?.release()
+        cancel()
+
+        webViewTimeAnimator.end()
+        webViewCodecWrapper?.stopAndRelease()
+        webViewExtractor.release()
+
+        galleryTimeAnimator.end()
+        galleryCodecWrapper?.stopAndRelease()
+        galleryExtractor.release()
+
+        findNavController().navigate(CameraFragmentDirections.toPlayer2(currentFilePath))
+    }
+
+    private fun initRecorderView() {
+        val metrics = DisplayMetrics()
+        activity!!.windowManager.defaultDisplay.getMetrics(metrics)
+        mScreenDensity = metrics.densityDpi
+
+        initRecorder()
+        prepareRecorder()
+
+        mProjectionManager =
+            requireContext().getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+
+        mMediaProjectionCallback = MediaProjectionCallback()
+    }
+
+    private fun initRecorder() {
+        if (mMediaRecorder == null) {
+            mMediaRecorder = MediaRecorder()
+            mMediaRecorder?.setVideoSource(MediaRecorder.VideoSource.SURFACE)
+            mMediaRecorder?.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+            mMediaRecorder?.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+            mMediaRecorder?.setVideoEncodingBitRate(10000000)
+            mMediaRecorder?.setVideoFrameRate(30)
+            mMediaRecorder?.setVideoSize(DISPLAY_WIDTH, DISPLAY_HEIGHT)
+            currentFilePath = getVideoFilePath(requireContext())
+            mMediaRecorder?.setOutputFile(currentFilePath)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        if (mMediaProjection != null) {
+            mMediaProjection?.stop()
+            mMediaProjection = null
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent) {
+        if (requestCode != PERMISSION_CODE) {
+            return
+        }
+
+        if (resultCode != RESULT_OK) {
+            mToggleButton?.setChecked(false)
+            return
+        }
+
+        mMediaProjection = mProjectionManager?.getMediaProjection(resultCode, data)
+        mMediaProjection?.registerCallback(mMediaProjectionCallback, null)
+        mVirtualDisplay = createVirtualDisplay()
+        mMediaRecorder?.start()
+    }
+
+    private fun createVirtualDisplay(): VirtualDisplay {
+        return mMediaProjection!!.createVirtualDisplay(
+            "MainActivity",
+            DISPLAY_WIDTH, DISPLAY_HEIGHT, mScreenDensity,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            mMediaRecorder!!.surface, null /*Handler*/, null
+        )
+    }
+
+    private fun prepareRecorder() {
+        try {
+            mMediaRecorder!!.prepare()
+        } catch (e: IllegalStateException) {
+            e.printStackTrace()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         startBackgroundThread()
 
-        // When the screen is turned off and turned back on, the SurfaceTexture is already
-        // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
-        // a camera and start preview from here (otherwise, we wait until the surface is ready in
-        // the SurfaceTextureListener).
         if (cameraTexture.isAvailable) {
             openCamera(cameraTexture.width, cameraTexture.height)
         } else {
@@ -473,7 +605,8 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
             val previewSurface = Surface(texture)
             previewRequestBuilder.addTarget(previewSurface)
 
-            cameraDevice?.createCaptureSession(listOf(previewSurface),
+            cameraDevice?.createCaptureSession(
+                listOf(previewSurface),
                 object : CameraCaptureSession.StateCallback() {
 
                     override fun onConfigured(session: CameraCaptureSession) {
@@ -545,6 +678,8 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
         cameraTexture!!.setTransform(matrix)
     }
 
+    private var currentFilePath = ""
+
     private fun getVideoFilePath(context: Context?): String {
         val filename = "${System.currentTimeMillis()}.mp4"
         val dir = context?.getExternalFilesDir(null)
@@ -553,25 +688,6 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
             filename
         } else {
             "${dir.absolutePath}/$filename"
-        }
-    }
-
-    private var mScreenDensity: Int = 0
-    private var mProjectionManager: MediaProjectionManager? = null
-    private var mMediaProjection: MediaProjection? = null
-    private var mMediaRecorder: MediaRecorder? = null
-
-    override fun onDestroy() {
-        super.onDestroy()
-        if (mMediaProjection != null) {
-            mMediaProjection?.stop()
-            mMediaProjection = null
-        }
-    }
-
-    fun onToggleScreenShare(view: View) {
-        if (!isRecordingVideo) {
-        } else {
         }
     }
 
