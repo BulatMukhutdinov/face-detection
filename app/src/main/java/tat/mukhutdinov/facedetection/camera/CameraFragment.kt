@@ -230,7 +230,6 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
 
         launch(handler) {
             delay(1000)
-
             while (true) {
                 val bmOverlay = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
 
@@ -469,8 +468,8 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
         var resized = getResizedBitmap(imageBitmap, RESIZED_IMAGE_SIZE)
 
         val galleryParams = galleryTexture.layoutParams
-        galleryParams.width = root.width
-        galleryParams.height = resized.height * root.width / resized.width
+        galleryParams.width = 400
+        galleryParams.height = resized.height * 400 / resized.width
         galleryTexture.layoutParams = galleryParams
 
         mediaMetadataRetriever.setDataSource(url, hashMapOf())
@@ -479,10 +478,10 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
 
         resized = getResizedBitmap(imageBitmap, RESIZED_IMAGE_SIZE)
 
-        val viewViewParams = webViewTexture.layoutParams
-        viewViewParams.width = root.width
-        viewViewParams.height = resized.height * root.width / resized.width
-        webViewTexture.layoutParams = viewViewParams
+        val webViewParams = webViewTexture.layoutParams
+        webViewParams.width = root.width
+        webViewParams.height = resized.height * root.width / resized.width
+        webViewTexture.layoutParams = webViewParams
 
         var width = root.width
         var height = root.height
@@ -549,16 +548,15 @@ class CameraFragment : Fragment(), CoroutineScope by CoroutineScope(Dispatchers.
                 ?: throw RuntimeException("Cannot get available preview/video sizes")
             sensorOrientation = characteristics.get(SENSOR_ORIENTATION) ?: 0
             videoSize = chooseVideoSize(map.getOutputSizes(MediaRecorder::class.java))
-            previewSize = chooseOptimalSize(
-                map.getOutputSizes(SurfaceTexture::class.java),
-                width, height, videoSize
-            )
+            previewSize = Size(DISPLAY_WIDTH, DISPLAY_HEIGHT - 569)
 
-            if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                cameraTexture.setAspectRatio(previewSize.width, previewSize.height)
-            } else {
-                cameraTexture.setAspectRatio(previewSize.height, previewSize.width)
-            }
+            cameraTexture.setAspectRatio(previewSize.width, previewSize.height)
+
+//            if (resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
+//                cameraTexture.setAspectRatio(previewSize.width, previewSize.height)
+//            } else {
+//                cameraTexture.setAspectRatio(previewSize.height, previewSize.width)
+//            }
             configureTransform(width, height)
             manager.openCamera(cameraId, stateCallback, null)
         } catch (e: CameraAccessException) {
